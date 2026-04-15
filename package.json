@@ -1,0 +1,13 @@
+{
+  "name": "melody-sync-v2-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter './packages/*' dev",
+    "dev:server": "pnpm --filter @melody-sync/server dev",
+    "dev:web": "pnpm --filter @melody-sync/web dev",
+    "build": "pnpm --filter @melody-sync/types build && pnpm --filter @melody-sync/server build && pnpm --filter @melody-sync/web build",
+    "typecheck": "pnpm --recursive typecheck"
+  },
+  "packageManager": "pnpm@10.0.0"
+}
