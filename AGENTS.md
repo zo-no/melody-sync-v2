@@ -6,14 +6,15 @@
 
 ## 这个项目是什么
 
-MelodySync v2 是一个**本地优先的 AI 任务工作台**，单用户。
+MelodySync v2 是一个**远程 AI 会话工具**，核心职责：
+1. 管理与 AI 的对话会话（Session / Run）
+2. 通过 conductor CLI 展示和操作任务
+
+**任务调度由 conductor 负责，本项目不实现任务系统。**
 
 核心对象：
-- **Project**（项目）— 组织维度，会话和任务都归属于项目
-- **Session**（会话）— 纯对话记录，用于人与 AI 交流
-- **Task**（任务）— 独立可执行单元，与会话完全解耦
-
-AI 通过 CLI 操作任务，人类通过 Web UI 查看和管理。
+- **Session**（会话）— 持久对话容器，归属于某个 conductor Project
+- **Run**（执行）— 某次会话执行的快照
 
 ---
 
@@ -22,16 +23,15 @@ AI 通过 CLI 操作任务，人类通过 Web UI 查看和管理。
 ### 第一步：读架构文档
 
 ```
-docs/README.md         ← 文档导航入口，从这里开始
-docs/architecture.md   ← 产品定位 + 顶层数据模型（概览）
+docs/README.md         ← 文档导航入口
+docs/architecture.md   ← 产品定位 + 系统边界（先读这个）
 ```
 
 按需深入阅读：
-- [数据模型](docs/data-model.md) — Project / Session / Task 数据结构
-- [记忆系统](docs/memory-system.md) — INDEX.md 约定、知识库注入
-- [执行模型](docs/execution-model.md) — 提示词三层、调度器、任务执行流程
+- [数据模型](docs/data-model.md) — Session / Run 数据结构
+- [执行模型](docs/execution-model.md) — Run 生命周期、conductor 集成、follow-up queue
 - [数据库 Schema](docs/database-schema.md) — SQLite 表定义
-- [架构实现](docs/implementation-guide.md) — 目录结构、启动顺序、WebSocket
+- [架构实现](docs/implementation-guide.md) — 目录结构、conductor 集成层、WebSocket
 - [CLI & HTTP API](docs/cli-api.md) — 所有接口定义
 - [Web UI 设计](docs/ui-design.md) — 布局、交互、组件
 - [已决策项](docs/decisions.md) — 所有设计决策汇总
@@ -44,49 +44,37 @@ melody-sync-v2/
 ├── packages/
 │   ├── server/          # 后端（Bun + Hono + TypeScript）
 │   │   └── src/
-│   │       ├── db/           # SQLite 初始化（建表）
-│   │       ├── models/       # M — 纯数据操作层（无副作用，无 HTTP 依赖）
-│   │       ├── services/     # 有状态服务层（调度器、WS 推送）
-│   │       │   ├── scheduler.ts  # croner + job registry + reconcile
+│   │       ├── db/           # SQLite 初始化
+│   │       ├── models/       # Session / Run 数据操作层
+│   │       ├── services/
+│   │       │   ├── conductor.ts  # conductor CLI spawn 封装
 │   │       │   └── ws.ts         # WebSocket invalidation
 │   │       ├── controllers/
-│   │       │   ├── http/     # C — Hono 路由层
-│   │       │   └── cli/      # C — Commander CLI 层
+│   │       │   ├── http/     # Hono 路由层
+│   │       │   └── cli/      # Commander CLI 层
 │   │       ├── server.ts     # HTTP server 入口（port 7761）
-│   │       │                 # 启动顺序：initDb → reconcile → scheduler → HTTP
 │   │       └── cli.ts        # CLI 入口（bin: melodysync）
 │   │
 │   ├── web/             # 前端（React 19 + Vite + Zustand + TailwindCSS）
-│   │   └── src/
-│   │       ├── api/          # 类型安全 HTTP client
-│   │       ├── controllers/  # Zustand store
-│   │       └── views/        # 页面和组件
-│   │
-│   └── types/           # 共享类型（前后端共用）
-│       └── src/
-│           ├── session.ts
-│           ├── run.ts
-│           ├── workbench.ts
-│           └── api.ts
+│   └── types/           # 共享类型
 │
-├── docs/
-│   └── architecture.md  # 权威架构文档
-├── AGENTS.md            # 本文件
-└── pnpm-workspace.yaml
+└── docs/
 ```
 
 ### 第三步：理解 MVC 架构
 
 ```
 Model（packages/server/src/models/）
-  不依赖 HTTP，直接操作 SQLite 和文件系统
-  CLI 和 HTTP routes 都调用这层
+  只管 Session / Run，直接操作 SQLite
+
+Service — conductor（packages/server/src/services/conductor.ts）
+  spawn conductor CLI，获取 Project / Task 数据
 
 Controller — HTTP（packages/server/src/controllers/http/）
-  Hono 路由，只做：解析请求 → 调用 Model → 返回响应
+  Hono 路由，解析请求 → 调用 model 或 conductor service → 返回响应
 
 Controller — CLI（packages/server/src/controllers/cli/）
-  Commander 命令，直接调用 Model，不走 HTTP
+  Commander 命令，直接调用 model
 
 View（packages/web/src/）
   React 组件，通过 api/ 消费 HTTP API
@@ -98,36 +86,48 @@ View（packages/web/src/）
 
 | 要改什么 | 先看文档 | 再看代码 |
 |---|---|---|
-| 数据结构 | `docs/data-model.md` | `packages/server/src/db/` + `packages/types/src/` |
-| 记忆系统 | `docs/memory-system.md` | `packages/server/src/models/context.ts` |
-| 任务执行流程 | `docs/execution-model.md` | `packages/server/src/models/task.ts` |
-| 调度器 | `docs/execution-model.md` | `packages/server/src/services/scheduler.ts` |
+| 会话数据结构 | `docs/data-model.md` | `packages/server/src/models/session.ts` |
+| Run 执行流程 | `docs/execution-model.md` | `packages/server/src/models/run.ts` |
+| conductor 集成 | `docs/execution-model.md` | `packages/server/src/services/conductor.ts` |
 | WebSocket | `docs/implementation-guide.md` | `packages/server/src/services/ws.ts` |
 | CLI 命令 | `docs/cli-api.md` | `packages/server/src/controllers/cli/` |
 | HTTP 路由 | `docs/cli-api.md` | `packages/server/src/controllers/http/` |
-| Session / Run | `docs/data-model.md` | `packages/server/src/models/session.ts` + `run.ts` |
 | 前端布局 | `docs/ui-design.md` | `packages/web/src/views/` |
-| 前端状态 | `docs/ui-design.md` | `packages/web/src/controllers/` |
 | 已决策项 | `docs/decisions.md` | — |
-| 一期进度 | `docs/roadmap.md` | — |
 
 ---
 
 ## 开发规范
 
-1. **Model 层无 HTTP 依赖**：model 函数只接受普通参数，不接触 req/res
-2. **CLI 和 HTTP 共用 Model**：不要在 controller 里写业务逻辑
-3. **类型从 @melody-sync/types 引入**：不要在 server 或 web 里重复定义共享类型
-4. **所有 CLI 命令支持 --json**：AI 调用时解析 JSON 输出
-5. **SQLite 用 Bun 内置**：不用 better-sqlite3 或 drizzle
-6. **任务操作写 task_ops**：每次状态变更都要记录操作日志
-7. **prompt 占位符**：context.ts 组装时支持 `{memoryPath}`、`{date}`（YYYY-MM-DD）、`{projectName}` 等占位符，用 replaceAll 替换，执行时动态注入
-8. **查询任务历史**：`melodysync task ops <id>` 查操作日志，`melodysync task logs <id>` 查执行日志，AI 做系统分析时可以读取这些数据
+1. **Model 层无 HTTP 依赖**：model 函数只接受普通参数
+2. **CLI 和 HTTP 共用 Model**：不在 controller 里写业务逻辑
+3. **类型从 @melody-sync/types 引入**
+4. **所有 CLI 命令支持 --json**
+5. **SQLite 用 Bun 内置**
+6. **任务操作走 conductor CLI**：不在 MelodySync 里直接操作任务数据库
 
 ---
 
-## 当前开发状态
+## 操作任务的正确方式
 
-一期范围见 `docs/architecture.md` 十五章节。
+AI 在会话中需要操作任务时，直接调用 conductor CLI：
 
-参考项目：`/Users/kual/code/melody-sync`（v1，可以参考迁移实现）
+```bash
+# 查看任务
+conductor task list --project <id> --json
+
+# 创建任务
+conductor task create --title "..." --project <id> --assignee ai --kind recurring --cron "0 9 * * *" --json
+
+# 标记完成
+conductor task done <id> --output "完成说明"
+```
+
+不要通过 MelodySync 的 HTTP API 操作任务（那是给前端用的代理层）。
+
+---
+
+## 参考项目
+
+- conductor：`/Users/kual/code/conductor`（任务调度引擎，本项目的依赖）
+- v1：`/Users/kual/code/melody-sync`（可参考迁移实现）

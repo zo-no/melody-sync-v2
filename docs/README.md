@@ -4,15 +4,15 @@
 - [核心架构概览](architecture.md)
 
 ## 设计文档
-- [数据模型](data-model.md) — Project / Session / Task 数据结构
-- [记忆系统](memory-system.md) — INDEX.md 约定、知识库注入
-- [执行模型](execution-model.md) — 提示词三层、调度器、任务执行流程
+- [数据模型](data-model.md) — Session / Run 数据结构
+- [执行模型](execution-model.md) — Run 生命周期、conductor 集成、follow-up queue
 - [数据库 Schema](database-schema.md) — SQLite 表定义
 
 ## 实现指南
-- [架构层映射](implementation-guide.md) — 目录结构、启动顺序、WebSocket
+- [架构层映射](implementation-guide.md) — 目录结构、conductor 集成层、WebSocket
 - [CLI & HTTP API](cli-api.md) — 所有接口定义
 - [Web UI 设计](ui-design.md) — 布局、交互、组件
+- [运维指南](ops-guide.md) — 启动、停止、日志、环境变量
 
 ## 决策记录
 - [已决策项](decisions.md) — 所有设计决策汇总
