@@ -18,7 +18,10 @@ function printSession(s: Session): void {
   const flags = [s.archived ? '[archived]' : '', s.pinned ? '[pinned]' : ''].filter(Boolean).join(' ')
   console.log(`${s.id}  ${s.name}  ${flags}`)
   console.log(`  project: ${s.projectId}`)
+  if (s.tool) console.log(`  tool: ${s.tool}`)
   if (s.model) console.log(`  model: ${s.model}`)
+  if (s.effort) console.log(`  effort: ${s.effort}`)
+  if (s.thinking) console.log('  thinking: enabled')
   console.log(`  created: ${s.createdAt}  updated: ${s.updatedAt}`)
 }
 
@@ -80,12 +83,64 @@ sessionCommand
   .description('Create a new session')
   .requiredOption('--project <projectId>', 'Project id')
   .option('--name <name>', 'Session name')
+  .option('--tool <tool>', 'Tool name')
   .option('--model <model>', 'Model name')
+  .option('--effort <effort>', 'Reasoning effort')
+  .option('--thinking', 'Enable thinking mode', false)
   .option('--json', 'Output as JSON', false)
-  .action((opts: { project: string; name?: string; model?: string; json: boolean }) => {
+  .action((opts: {
+    project: string
+    name?: string
+    tool?: string
+    model?: string
+    effort?: string
+    thinking: boolean
+    json: boolean
+  }) => {
     try {
-      const session = createSession({ projectId: opts.project, name: opts.name, model: opts.model })
+      const session = createSession({
+        projectId: opts.project,
+        name: opts.name,
+        tool: opts.tool,
+        model: opts.model,
+        effort: opts.effort,
+        thinking: opts.thinking,
+      })
       opts.json ? printJson(session) : (console.log(`Created session: ${session.id}`), printSession(session))
+    } catch (e) {
+      console.error('Error:', String(e))
+      process.exit(1)
+    }
+  })
+
+// session update
+sessionCommand
+  .command('update <id>')
+  .description('Update session preferences')
+  .option('--name <name>', 'Session name')
+  .option('--tool <tool>', 'Tool name')
+  .option('--model <model>', 'Model name')
+  .option('--effort <effort>', 'Reasoning effort')
+  .option('--thinking', 'Enable thinking mode')
+  .option('--no-thinking', 'Disable thinking mode')
+  .option('--json', 'Output as JSON', false)
+  .action((id: string, opts: {
+    name?: string
+    tool?: string
+    model?: string
+    effort?: string
+    thinking?: boolean
+    json: boolean
+  }) => {
+    try {
+      const session = updateSession(id, {
+        ...(opts.name !== undefined ? { name: opts.name } : {}),
+        ...(opts.tool !== undefined ? { tool: opts.tool } : {}),
+        ...(opts.model !== undefined ? { model: opts.model } : {}),
+        ...(opts.effort !== undefined ? { effort: opts.effort } : {}),
+        ...(opts.thinking !== undefined ? { thinking: opts.thinking } : {}),
+      })
+      opts.json ? printJson(session) : printSession(session)
     } catch (e) {
       console.error('Error:', String(e))
       process.exit(1)

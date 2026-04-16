@@ -10,6 +10,7 @@ import {
   deleteSession,
 } from '../../models/session'
 import { appendEvent, listEvents } from '../../models/history'
+import { submitSessionMessage } from '../../runtime/session-runner'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -30,24 +31,34 @@ function sc(n: number): ContentfulStatusCode {
 const CreateSessionSchema = z.object({
   projectId: z.string(),
   name: z.string().optional(),
-  model: z.string().optional(),
-  effort: z.string().optional(),
+  tool: z.string().optional(),
+  model: z.string().nullable().optional(),
+  effort: z.string().nullable().optional(),
   thinking: z.boolean().optional(),
+  claudeSessionId: z.string().nullable().optional(),
+  codexThreadId: z.string().nullable().optional(),
 })
 
 const UpdateSessionSchema = z.object({
   name: z.string().optional(),
   pinned: z.boolean().optional(),
   archived: z.boolean().optional(),
-  model: z.string().optional(),
-  effort: z.string().optional(),
+  tool: z.string().optional(),
+  model: z.string().nullable().optional(),
+  effort: z.string().nullable().optional(),
   thinking: z.boolean().optional(),
+  claudeSessionId: z.string().nullable().optional(),
+  codexThreadId: z.string().nullable().optional(),
   autoRenamePending: z.boolean().optional(),
 })
 
 const SendMessageSchema = z.object({
   text: z.string(),
   requestId: z.string().optional(),
+  tool: z.string().optional(),
+  model: z.string().nullable().optional(),
+  effort: z.string().nullable().optional(),
+  thinking: z.boolean().optional(),
   attachments: z
     .array(
       z.object({
@@ -158,21 +169,18 @@ sessionsRouter.post('/sessions/:id/messages', async (c) => {
   const session = getSession(id)
   if (!session) return c.json(errBody('Session not found'), sc(404))
 
-  const now = Date.now()
-  appendEvent(id, {
-    timestamp: now,
-    type: 'message',
-    role: 'user',
-    content: parsed.data.text,
-  })
-
-  appendEvent(id, {
-    timestamp: now + 1,
-    type: 'message',
-    role: 'assistant',
-    content: 'Message saved. MelodySync v2 is not wired to a live AI runner yet, so this session currently records conversation history only.',
-  })
-
-  const updatedSession = updateSession(id, {})
-  return c.json(ok({ queued: false, run: null, session: updatedSession }))
+  try {
+    return c.json(ok(submitSessionMessage({
+      sessionId: id,
+      text: parsed.data.text,
+      requestId: parsed.data.requestId,
+      tool: parsed.data.tool,
+      model: parsed.data.model,
+      effort: parsed.data.effort,
+      thinking: parsed.data.thinking,
+      attachments: parsed.data.attachments,
+    })))
+  } catch (e) {
+    return c.json(errBody(String(e)), sc(500))
+  }
 })

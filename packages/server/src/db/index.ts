@@ -12,6 +12,16 @@ function resolveDbPath(): string {
     : resolve(raw)
 }
 
+function hasColumn(db: Database, table: string, column: string): boolean {
+  const rows = db.query<{ name: string }, []>(`PRAGMA table_info(${table})`).all()
+  return rows.some((row) => row.name === column)
+}
+
+function ensureColumn(db: Database, table: string, column: string, definition: string): void {
+  if (hasColumn(db, table, column)) return
+  db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+}
+
 function initSchema(db: Database): void {
   db.run('PRAGMA journal_mode = WAL')
   db.run('PRAGMA foreign_keys = ON')
@@ -33,9 +43,12 @@ function initSchema(db: Database): void {
     project_id          TEXT NOT NULL REFERENCES projects(id),
     name                TEXT NOT NULL,
     auto_rename_pending INTEGER DEFAULT 0,
+    tool                TEXT,
     model               TEXT,
     effort              TEXT,
     thinking            INTEGER DEFAULT 0,
+    claude_session_id   TEXT,
+    codex_thread_id     TEXT,
     active_run_id       TEXT,
     follow_up_queue     TEXT NOT NULL DEFAULT '[]',
     pinned              INTEGER DEFAULT 0,
@@ -55,9 +68,12 @@ function initSchema(db: Database): void {
     session_id            TEXT NOT NULL REFERENCES sessions(id),
     request_id            TEXT NOT NULL,
     state                 TEXT NOT NULL DEFAULT 'accepted',
+    tool                  TEXT NOT NULL DEFAULT 'codex',
     model                 TEXT NOT NULL,
     effort                TEXT,
     thinking              INTEGER DEFAULT 0,
+    claude_session_id     TEXT,
+    codex_thread_id       TEXT,
     cancel_requested      INTEGER DEFAULT 0,
     result                TEXT,
     failure_reason        TEXT,
@@ -93,6 +109,13 @@ function initSchema(db: Database): void {
     value      TEXT NOT NULL,
     updated_at TEXT NOT NULL
   ) STRICT`)
+
+  ensureColumn(db, 'sessions', 'tool', 'TEXT')
+  ensureColumn(db, 'sessions', 'claude_session_id', 'TEXT')
+  ensureColumn(db, 'sessions', 'codex_thread_id', 'TEXT')
+  ensureColumn(db, 'runs', 'tool', "TEXT NOT NULL DEFAULT 'codex'")
+  ensureColumn(db, 'runs', 'claude_session_id', 'TEXT')
+  ensureColumn(db, 'runs', 'codex_thread_id', 'TEXT')
 }
 
 let _db: Database | null = null

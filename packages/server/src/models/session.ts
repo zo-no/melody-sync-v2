@@ -15,9 +15,12 @@ type SessionRow = {
   project_id: string
   name: string
   auto_rename_pending: number
+  tool: string | null
   model: string | null
   effort: string | null
   thinking: number
+  claude_session_id: string | null
+  codex_thread_id: string | null
   active_run_id: string | null
   follow_up_queue: string
   pinned: number
@@ -33,9 +36,12 @@ function rowToSession(row: SessionRow): Session {
     projectId: row.project_id,
     name: row.name,
     autoRenamePending: row.auto_rename_pending === 1 ? true : undefined,
+    tool: row.tool ?? undefined,
     model: row.model ?? undefined,
     effort: row.effort ?? undefined,
     thinking: row.thinking === 1 ? true : undefined,
+    claudeSessionId: row.claude_session_id ?? undefined,
+    codexThreadId: row.codex_thread_id ?? undefined,
     activeRunId: row.active_run_id ?? undefined,
     pinned: row.pinned === 1 ? true : undefined,
     archived: row.archived === 1 ? true : undefined,
@@ -83,15 +89,22 @@ export function createSession(input: CreateSessionInput): Session {
   const ts = now()
 
   db.run(
-    `INSERT INTO sessions (id, project_id, name, auto_rename_pending, model, effort, thinking, pinned, archived, created_at, updated_at)
-     VALUES (?, ?, ?, 0, ?, ?, ?, 0, 0, ?, ?)`,
+    `INSERT INTO sessions (
+      id, project_id, name, auto_rename_pending,
+      tool, model, effort, thinking, claude_session_id, codex_thread_id,
+      pinned, archived, created_at, updated_at
+    )
+     VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`,
     [
       id,
       input.projectId,
       input.name ?? 'New Session',
+      input.tool ?? 'codex',
       input.model ?? null,
       input.effort ?? null,
       input.thinking ? 1 : 0,
+      input.claudeSessionId ?? null,
+      input.codexThreadId ?? null,
       ts, ts,
     ]
   )
@@ -110,9 +123,12 @@ export function updateSession(id: string, input: UpdateSessionInput): Session {
   const fieldMap: Array<[keyof UpdateSessionInput, string]> = [
     ['name', 'name'],
     ['autoRenamePending', 'auto_rename_pending'],
+    ['tool', 'tool'],
     ['model', 'model'],
     ['effort', 'effort'],
     ['thinking', 'thinking'],
+    ['claudeSessionId', 'claude_session_id'],
+    ['codexThreadId', 'codex_thread_id'],
     ['pinned', 'pinned'],
     ['archived', 'archived'],
     ['activeRunId', 'active_run_id'],
@@ -150,6 +166,10 @@ export function deleteSession(id: string): void {
 export interface QueuedMessage {
   requestId: string
   text: string
+  tool: string
+  model: string | null
+  effort: string | null
+  thinking: boolean
 }
 
 export function getFollowUpQueue(id: string): QueuedMessage[] {

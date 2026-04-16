@@ -15,9 +15,12 @@ type RunRow = {
   session_id: string
   request_id: string
   state: string
+  tool: string
   model: string
   effort: string | null
   thinking: number
+  claude_session_id: string | null
+  codex_thread_id: string | null
   cancel_requested: number
   result: string | null
   failure_reason: string | null
@@ -37,9 +40,12 @@ function rowToRun(row: RunRow): Run {
     sessionId: row.session_id,
     requestId: row.request_id,
     state: row.state as Run['state'],
+    tool: row.tool,
     model: row.model,
     effort: row.effort ?? undefined,
     thinking: row.thinking === 1,
+    claudeSessionId: row.claude_session_id ?? undefined,
+    codexThreadId: row.codex_thread_id ?? undefined,
     cancelRequested: row.cancel_requested === 1,
     runnerProcessId: row.runner_process_id ?? undefined,
     result: (row.result as Run['result']) ?? undefined,
@@ -79,12 +85,14 @@ export function createRun(input: CreateRunInput): Run {
 
   db.run(
     `INSERT INTO runs (
-      id, session_id, request_id, state, model, effort, thinking,
+      id, session_id, request_id, state, tool, model, effort, thinking,
+      claude_session_id, codex_thread_id,
       cancel_requested, created_at, updated_at
-    ) VALUES (?,?,?,?,?,?,?,0,?,?)`,
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,0,?,?)`,
     [
       id, input.sessionId, input.requestId, 'accepted',
-      input.model, input.effort ?? null, input.thinking ? 1 : 0,
+      input.tool, input.model, input.effort ?? null, input.thinking ? 1 : 0,
+      input.claudeSessionId ?? null, input.codexThreadId ?? null,
       ts, ts,
     ]
   )
@@ -99,8 +107,9 @@ export function updateRun(id: string, patch: Partial<Run>): Run {
   const db = getDb()
   const ts = now()
   const fieldMap: Array<[keyof Run, string]> = [
-    ['state', 'state'], ['model', 'model'], ['effort', 'effort'],
-    ['thinking', 'thinking'], ['cancelRequested', 'cancel_requested'],
+    ['state', 'state'], ['tool', 'tool'], ['model', 'model'], ['effort', 'effort'],
+    ['thinking', 'thinking'], ['claudeSessionId', 'claude_session_id'], ['codexThreadId', 'codex_thread_id'],
+    ['cancelRequested', 'cancel_requested'],
     ['runnerProcessId', 'runner_process_id'], ['result', 'result'],
     ['failureReason', 'failure_reason'],
     ['contextInputTokens', 'context_input_tokens'],

@@ -4,6 +4,7 @@ import { authRouter } from './controllers/http/auth'
 import { projectsRouter } from './controllers/http/projects'
 import { sessionsRouter } from './controllers/http/sessions'
 import { runsRouter } from './controllers/http/runs'
+import { runtimeRouter } from './controllers/http/runtime'
 import { requireAuth } from './middleware/auth'
 
 // ─── app ──────────────────────────────────────────────────────────────────────
@@ -23,6 +24,7 @@ app.use('/api/*', requireAuth)
 app.route('/api', projectsRouter)
 app.route('/api', sessionsRouter)
 app.route('/api', runsRouter)
+app.route('/api', runtimeRouter)
 
 // ─── global error handler ─────────────────────────────────────────────────────
 

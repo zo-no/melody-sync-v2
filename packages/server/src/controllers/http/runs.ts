@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { ApiResult } from '@melody-sync/types'
-import { getRun, getRunsBySession, cancelRun } from '../../models/run'
+import { getRun, getRunsBySession } from '../../models/run'
+import { cancelActiveRun } from '../../runtime/session-runner'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -47,7 +48,7 @@ runsRouter.get('/sessions/:id/runs', (c) => {
 runsRouter.post('/runs/:id/cancel', (c) => {
   const id = c.req.param('id')
   try {
-    const run = cancelRun(id)
+    const run = cancelActiveRun(id)
     return c.json(ok(run))
   } catch (e) {
     const msg = String(e)
