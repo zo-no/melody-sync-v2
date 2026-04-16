@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { SessionEvent, Run } from '@melody-sync/types'
+import type { Run, SendMessageInput, SessionEvent } from '@melody-sync/types'
 import * as api from '@/api/client'
 import { useSessionStore } from '@/controllers/session'
 
@@ -8,11 +8,12 @@ interface ChatState {
   sending: boolean
   draft: string
   runs: Run[]
+  sendError: string | null
 }
 
 interface ChatActions {
   fetchEvents(sessionId: string): Promise<void>
-  sendMessage(sessionId: string, text: string): Promise<void>
+  sendMessage(sessionId: string, input: SendMessageInput): Promise<void>
   setDraft(text: string): void
   fetchRuns(sessionId: string): Promise<void>
   cancelRun(runId: string): Promise<void>
@@ -25,6 +26,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   sending: false,
   draft: '',
   runs: [],
+  sendError: null,
 
   async fetchEvents(sessionId: string): Promise<void> {
     const result = await api.getSessionEvents(sessionId)
@@ -33,23 +35,32 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
 
-  async sendMessage(sessionId: string, text: string): Promise<void> {
-    const nextDraft = text.trim()
+  async sendMessage(sessionId: string, input: SendMessageInput): Promise<void> {
+    const nextDraft = input.text.trim()
     if (!nextDraft) return
 
-    set({ sending: true, draft: '' })
+    set({ sending: true, draft: '', sendError: null })
     try {
-      const result = await api.sendMessage(sessionId, { text: nextDraft })
+      const result = await api.sendMessage(sessionId, { ...input, text: nextDraft })
       if (!result.ok) {
-        set({ draft: nextDraft })
+        set({ draft: nextDraft, sendError: result.error })
         return
       }
 
+      const { hydrateSession, currentProjectId, fetchSessions } = useSessionStore.getState()
+      if (result.data.session) {
+        hydrateSession(result.data.session)
+      }
+      if (result.data.run) {
+        set((state) => ({
+          runs: [result.data.run!, ...state.runs.filter((run) => run.id !== result.data.run!.id)],
+        }))
+      }
       await get().fetchEvents(sessionId)
-      const { currentProjectId, fetchSessions } = useSessionStore.getState()
       if (currentProjectId) {
         await fetchSessions(currentProjectId)
       }
+      set({ sendError: null })
     } finally {
       set({ sending: false })
     }

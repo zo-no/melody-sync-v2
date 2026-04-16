@@ -12,6 +12,8 @@ interface SessionState {
 
 interface SessionActions {
   fetchSessions(projectId?: string): Promise<void>
+  refreshSession(id: string): Promise<void>
+  hydrateSession(session: Session): void
   selectSession(id: string): void
   createSession(input: CreateSessionInput): Promise<Session>
   updateSession(id: string, input: UpdateSessionInput): Promise<void>
@@ -46,6 +48,24 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     } else {
       set({ error: result.error, loading: false })
     }
+  },
+
+  async refreshSession(id: string): Promise<void> {
+    const result = await api.getSession(id)
+    if (!result.ok) return
+    get().hydrateSession(result.data)
+  },
+
+  hydrateSession(session: Session): void {
+    set((state) => {
+      const existing = state.sessions.some((item) => item.id === session.id)
+      return {
+        sessions: existing
+          ? state.sessions.map((item) => (item.id === session.id ? session : item))
+          : [session, ...state.sessions],
+        currentSessionId: state.currentSessionId ?? session.id,
+      }
+    })
   },
 
   selectSession(id: string): void {

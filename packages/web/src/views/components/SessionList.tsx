@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react'
 import { useProjectStore } from '@/controllers/project'
 import { useSessionStore } from '@/controllers/session'
+import { StatusGlyph, ToolGlyph } from '@/views/components/UiGlyphs'
 import type { Project, Session } from '@melody-sync/types'
 
 function formatProjectPath(path?: string): string {
@@ -165,15 +166,9 @@ function ProjectSwitcher({ onProjectChosen }: ProjectSwitcherProps) {
         aria-expanded={open}
       >
         <div className="ms-project-switcher-copy">
-          <span className="ms-project-switcher-label">Project</span>
           <span className="ms-project-switcher-name">
             {currentProject?.name ?? 'No project selected'}
           </span>
-          {currentProject?.path && (
-            <span className="ms-project-switcher-path">
-              {formatProjectPath(currentProject.path)}
-            </span>
-          )}
         </div>
         <ChevronIcon open={open} />
       </button>
@@ -305,11 +300,11 @@ function NewProjectModal({ onClose }: { onClose: () => void }) {
 
 function SessionStateChip({ session }: { session: Session }) {
   if (session.activeRunId) {
-    return <span className="ms-session-chip is-live">Running</span>
+    return <StatusGlyph tone="live" pulse className="ms-session-state-glyph" />
   }
 
   if (session.autoRenamePending) {
-    return <span className="ms-session-chip">Naming</span>
+    return <StatusGlyph tone="warning" className="ms-session-state-glyph" />
   }
 
   return null
@@ -435,7 +430,7 @@ function SessionRow({
           </div>
           <div className="ms-session-row-meta">
             <span>{formatRelativeTime(session.updatedAt)}</span>
-            {session.model && <span>{session.model}</span>}
+            {session.tool && <ToolGlyph tool={session.tool} className="ms-session-row-tool" />}
             <SessionStateChip session={session} />
           </div>
         </button>
@@ -533,7 +528,7 @@ export function SessionList({ onRequestClose }: SessionListProps) {
     if (!query) return sessions
 
     return sessions.filter((session) => {
-      const haystack = [session.name, session.model]
+      const haystack = [session.name, session.tool, session.model]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
@@ -684,9 +679,6 @@ export function SessionList({ onRequestClose }: SessionListProps) {
         </div>
 
         <div className="ms-sidebar-footer">
-          {currentProject?.path && (
-            <p className="ms-sidebar-footer-note">{formatProjectPath(currentProject.path)}</p>
-          )}
           <button
             type="button"
             className="ms-new-session-button"

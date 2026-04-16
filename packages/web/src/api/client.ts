@@ -10,6 +10,8 @@ import type {
   CreateSessionInput,
   UpdateSessionInput,
   SendMessageInput,
+  RuntimeModelCatalog,
+  RuntimeTool,
 } from '@melody-sync/types'
 
 const BASE = '/api'
@@ -110,6 +112,18 @@ export function getSessionEvents(
 
 export function sendMessage(id: string, input: SendMessageInput): Promise<ApiResult<{ queued: boolean; run: Run | null; session: Session }>> {
   return request('POST', `/sessions/${id}/messages`, input)
+}
+
+// ── Runtime catalog ───────────────────────────────────────────────────────────
+
+export function getRuntimeTools(): Promise<ApiResult<RuntimeTool[]>> {
+  return request<RuntimeTool[]>('GET', '/tools')
+}
+
+export function getRuntimeModelCatalog(tool: string): Promise<ApiResult<RuntimeModelCatalog>> {
+  const params = new URLSearchParams()
+  params.set('tool', tool)
+  return request<RuntimeModelCatalog>('GET', `/models?${params.toString()}`)
 }
 
 // ── Runs ──────────────────────────────────────────────────────────────────────

@@ -2,12 +2,8 @@ import { useState } from 'react'
 import { useProjectStore } from '@/controllers/project'
 import { useSessionStore } from '@/controllers/session'
 import { SessionList } from '@/views/components/SessionList'
+import { StatusGlyph } from '@/views/components/UiGlyphs'
 import { ChatView } from '@/views/components/ChatView'
-
-function formatProjectPath(path?: string): string {
-  if (!path) return ''
-  return path.replace(/^\/Users\/[^/]+/, '~')
-}
 
 function MenuIcon() {
   return (
@@ -36,13 +32,6 @@ export function MainPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const headerTitle = currentSession?.name || currentProject?.name || 'MelodySync'
-  const headerSubtitle = currentSession
-    ? formatProjectPath(currentProject?.path)
-    : currentProject
-      ? formatProjectPath(currentProject.path)
-      : 'Session workspace'
-
-  const statusLabel = currentSession?.activeRunId ? 'Running' : 'Ready'
 
   return (
     <div className="ms-app-shell">
@@ -58,16 +47,14 @@ export function MainPage() {
 
         <div className="ms-header-copy">
           <h1 className="ms-header-title">{headerTitle}</h1>
-          <p className="ms-header-subtitle">{headerSubtitle}</p>
         </div>
 
         <div className="ms-header-actions">
-          {currentSession?.model && (
-            <span className="ms-header-chip">{currentSession.model}</span>
-          )}
-          <span className={`ms-status-pill${currentSession?.activeRunId ? ' is-live' : ''}`}>
-            {statusLabel}
-          </span>
+          <StatusGlyph
+            tone={currentSession?.activeRunId ? 'live' : 'muted'}
+            pulse={Boolean(currentSession?.activeRunId)}
+            className="ms-header-status-glyph"
+          />
         </div>
       </header>
 
