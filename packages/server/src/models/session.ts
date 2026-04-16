@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import type { Session, CreateSessionInput, UpdateSessionInput } from '@melody-sync/types'
-import { db } from '../db'
+import { getDb } from '../db'
 
 function genId(): string {
   return 'sess_' + randomBytes(8).toString('hex')
@@ -12,122 +12,65 @@ function now(): string {
 
 type SessionRow = {
   id: string
+  project_id: string
   name: string
-  folder: string
-  tool: string | null
+  auto_rename_pending: number
   model: string | null
   effort: string | null
   thinking: number
-  workflow_state: string | null
-  workflow_priority: string | null
-  task_list_origin: string | null
-  task_list_visibility: string | null
-  lt_role: string | null
-  lt_bucket: string | null
-  persistent_kind: string | null
-  builtin_name: string | null
-  project_session_id: string | null
-  forked_from_session_id: string | null
-  root_session_id: string | null
-  source_id: string | null
-  external_trigger_id: string | null
+  active_run_id: string | null
+  follow_up_queue: string
   pinned: number
   archived: number
   archived_at: string | null
-  active_run_id: string | null
-  ordinal: number
-  data: string
   created_at: string
   updated_at: string
 }
 
 function rowToSession(row: SessionRow): Session {
-  const base = JSON.parse(row.data) as Session
   return {
-    ...base,
     id: row.id,
+    projectId: row.project_id,
     name: row.name,
-    folder: row.folder,
-    ordinal: row.ordinal,
-    pinned: row.pinned === 1,
-    archived: row.archived === 1,
-    archivedAt: row.archived_at ?? undefined,
+    autoRenamePending: row.auto_rename_pending === 1 ? true : undefined,
+    model: row.model ?? undefined,
+    effort: row.effort ?? undefined,
+    thinking: row.thinking === 1 ? true : undefined,
     activeRunId: row.active_run_id ?? undefined,
+    pinned: row.pinned === 1 ? true : undefined,
+    archived: row.archived === 1 ? true : undefined,
+    archivedAt: row.archived_at ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
 }
 
-function nextOrdinal(): number {
-  const row = db.query<{ max_ordinal: number | null }, []>(
-    'SELECT MAX(ordinal) as max_ordinal FROM sessions'
-  ).get()
-  return (row?.max_ordinal ?? 0) + 1
-}
-
-function upsertRow(s: Session): void {
-  db.run(
-    `INSERT OR REPLACE INTO sessions (
-      id, name, folder, tool, model, effort, thinking,
-      workflow_state, workflow_priority, task_list_origin, task_list_visibility,
-      lt_role, lt_bucket, persistent_kind, builtin_name,
-      project_session_id, forked_from_session_id, root_session_id,
-      source_id, external_trigger_id,
-      pinned, archived, archived_at, active_run_id,
-      ordinal, data, created_at, updated_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [
-      s.id, s.name, s.folder,
-      s.tool ?? null, s.model ?? null, s.effort ?? null, s.thinking ? 1 : 0,
-      s.workflowState ?? '', s.workflowPriority ?? null,
-      s.taskListOrigin ?? null, s.taskListVisibility ?? null,
-      s.ltRole ?? null, s.ltBucket ?? null, s.persistentKind ?? null, s.builtinName ?? null,
-      s.projectSessionId ?? null, s.forkedFromSessionId ?? null, s.rootSessionId ?? null,
-      s.sourceId ?? null, s.externalTriggerId ?? null,
-      s.pinned ? 1 : 0, s.archived ? 1 : 0, s.archivedAt ?? null, s.activeRunId ?? null,
-      s.ordinal, JSON.stringify(s), s.createdAt, s.updatedAt,
-    ]
-  )
-}
-
 // ─── public API ───────────────────────────────────────────────────────────────
 
 export interface ListSessionsOpts {
-  folder?: string
+  projectId?: string
   archived?: boolean
-  visibility?: string
 }
 
 export function listSessions(opts: ListSessionsOpts = {}): Session[] {
-  const conditions: string[] = []
-  const params: (string | number)[] = []
+  const db = getDb()
+  const archived = opts.archived ?? false
 
-  if (opts.folder !== undefined) {
-    conditions.push('folder = ?')
-    params.push(opts.folder)
+  if (opts.projectId) {
+    const rows = db.query<SessionRow, [string, number]>(
+      `SELECT * FROM sessions WHERE project_id = ? AND archived = ? ORDER BY pinned DESC, updated_at DESC`
+    ).all(opts.projectId, archived ? 1 : 0)
+    return rows.map(rowToSession)
   }
 
-  if (opts.archived !== undefined) {
-    conditions.push('archived = ?')
-    params.push(opts.archived ? 1 : 0)
-  } else {
-    conditions.push('archived = 0')
-  }
-
-  if (opts.visibility !== undefined) {
-    conditions.push('task_list_visibility = ?')
-    params.push(opts.visibility)
-  }
-
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-  const rows = db.query<SessionRow, (string | number)[]>(
-    `SELECT * FROM sessions ${where} ORDER BY ordinal DESC`
-  ).all(...params)
-
+  const rows = db.query<SessionRow, [number]>(
+    `SELECT * FROM sessions WHERE archived = ? ORDER BY pinned DESC, updated_at DESC`
+  ).all(archived ? 1 : 0)
   return rows.map(rowToSession)
 }
 
 export function getSession(id: string): Session | null {
+  const db = getDb()
   const row = db.query<SessionRow, [string]>(
     'SELECT * FROM sessions WHERE id = ?'
   ).get(id)
@@ -135,63 +78,112 @@ export function getSession(id: string): Session | null {
 }
 
 export function createSession(input: CreateSessionInput): Session {
+  const db = getDb()
   const id = genId()
   const ts = now()
-  const ordinal = nextOrdinal()
 
-  const session: Session = {
-    id,
-    name: input.name ?? 'Untitled',
-    folder: input.folder ?? '~',
-    tool: input.tool,
-    model: input.model,
-    effort: input.effort,
-    thinking: input.thinking ?? false,
-    workflowState: '',
-    taskListOrigin: input.taskListOrigin,
-    taskListVisibility: input.taskListVisibility,
-    ltBucket: input.ltBucket,
-    forkedFromSessionId: input.forkedFromSessionId,
-    rootSessionId: input.forkedFromSessionId,
-    pinned: false,
-    archived: false,
-    ordinal,
-    createdAt: ts,
-    updatedAt: ts,
-  }
+  db.run(
+    `INSERT INTO sessions (id, project_id, name, auto_rename_pending, model, effort, thinking, pinned, archived, created_at, updated_at)
+     VALUES (?, ?, ?, 0, ?, ?, ?, 0, 0, ?, ?)`,
+    [
+      id,
+      input.projectId,
+      input.name ?? 'New Session',
+      input.model ?? null,
+      input.effort ?? null,
+      input.thinking ? 1 : 0,
+      ts, ts,
+    ]
+  )
 
-  upsertRow(session)
-  return session
+  return getSession(id)!
 }
 
 export function updateSession(id: string, input: UpdateSessionInput): Session {
   const existing = getSession(id)
   if (!existing) throw new Error(`Session not found: ${id}`)
 
-  const updated: Session = {
-    ...existing,
-    ...Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)),
-    updatedAt: now(),
+  const db = getDb()
+  const sets: string[] = ['updated_at = ?']
+  const params: (string | number | null)[] = [now()]
+
+  const fieldMap: Array<[keyof UpdateSessionInput, string]> = [
+    ['name', 'name'],
+    ['autoRenamePending', 'auto_rename_pending'],
+    ['model', 'model'],
+    ['effort', 'effort'],
+    ['thinking', 'thinking'],
+    ['pinned', 'pinned'],
+    ['archived', 'archived'],
+    ['activeRunId', 'active_run_id'],
+  ]
+
+  for (const [key, col] of fieldMap) {
+    if (key in input) {
+      sets.push(`${col} = ?`)
+      const val = input[key]
+      if (typeof val === 'boolean') {
+        params.push(val ? 1 : 0)
+      } else {
+        params.push((val ?? null) as string | null)
+      }
+    }
   }
 
-  upsertRow(updated)
-  return updated
+  if ('archived' in input) {
+    sets.push('archived_at = ?')
+    params.push(input.archived ? now() : null)
+  }
+
+  params.push(id)
+  db.run(`UPDATE sessions SET ${sets.join(', ')} WHERE id = ?`, params)
+  return getSession(id)!
 }
 
 export function deleteSession(id: string): void {
+  const db = getDb()
   db.run('DELETE FROM sessions WHERE id = ?', [id])
 }
 
-export function archiveSession(id: string): Session {
-  const existing = getSession(id)
-  if (!existing) throw new Error(`Session not found: ${id}`)
+// ─── follow-up queue ──────────────────────────────────────────────────────────
 
-  const ts = now()
-  const updated: Session = { ...existing, archived: true, archivedAt: ts, updatedAt: ts }
-  upsertRow(updated)
-  return updated
+export interface QueuedMessage {
+  requestId: string
+  text: string
 }
 
-export function pinSession(id: string, pinned: boolean): Session {
-  return updateSession(id, { pinned })
+export function getFollowUpQueue(id: string): QueuedMessage[] {
+  const db = getDb()
+  const row = db.query<{ follow_up_queue: string }, [string]>(
+    'SELECT follow_up_queue FROM sessions WHERE id = ?'
+  ).get(id)
+  if (!row) return []
+  try {
+    return JSON.parse(row.follow_up_queue) as QueuedMessage[]
+  } catch {
+    return []
+  }
+}
+
+export function enqueueFollowUp(id: string, msg: QueuedMessage): void {
+  const db = getDb()
+  const queue = getFollowUpQueue(id)
+  if (queue.some((m) => m.requestId === msg.requestId)) return // dedup
+  queue.push(msg)
+  db.run(
+    `UPDATE sessions SET follow_up_queue = ?, updated_at = ? WHERE id = ?`,
+    [JSON.stringify(queue), now(), id]
+  )
+}
+
+export function dequeueFollowUp(id: string): QueuedMessage | null {
+  const db = getDb()
+  const queue = getFollowUpQueue(id)
+  if (queue.length === 0) return null
+  const [next, ...rest] = queue
+  db.run(
+    `UPDATE sessions SET follow_up_queue = ?, updated_at = ? WHERE id = ?`,
+    [JSON.stringify(rest), now(), id]
+  )
+  return next!
 }

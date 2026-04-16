@@ -1,11 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MainPage } from '@/views/pages/MainPage'
-import { useSessionStore } from '@/controllers/session'
+import { useProjectStore } from '@/controllers/project'
 import './index.css'
 
-// Fetch sessions on startup
-useSessionStore.getState().fetchSessions()
+// Bootstrap: load projects on startup (auto-selects first project)
+useProjectStore.getState().fetchProjects()
 
 const rootEl = document.getElementById('root')
 if (!rootEl) throw new Error('Root element #root not found')

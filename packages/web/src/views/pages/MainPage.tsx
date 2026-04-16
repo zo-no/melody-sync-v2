@@ -1,58 +1,104 @@
+import { useState } from 'react'
+import { useProjectStore } from '@/controllers/project'
 import { useSessionStore } from '@/controllers/session'
 import { SessionList } from '@/views/components/SessionList'
 import { ChatView } from '@/views/components/ChatView'
 
+function formatProjectPath(path?: string): string {
+  if (!path) return ''
+  return path.replace(/^\/Users\/[^/]+/, '~')
+}
+
+function MenuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M4 7h16M4 12h16M4 17h16"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.75"
+      />
+    </svg>
+  )
+}
+
 export function MainPage() {
-  const currentSession = useSessionStore((s) => s.currentSession)
+  const sessions = useSessionStore((s) => s.sessions)
   const currentSessionId = useSessionStore((s) => s.currentSessionId)
+  const currentSession = sessions.find((session) => session.id === currentSessionId) ?? null
+
+  const projects = useProjectStore((s) => s.projects)
+  const currentProjectId = useProjectStore((s) => s.currentProjectId)
+  const currentProject = projects.find((project) => project.id === currentProjectId) ?? null
+
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  const headerTitle = currentSession?.name || currentProject?.name || 'MelodySync'
+  const headerSubtitle = currentSession
+    ? formatProjectPath(currentProject?.path)
+    : currentProject
+      ? formatProjectPath(currentProject.path)
+      : 'Session workspace'
+
+  const statusLabel = currentSession?.activeRunId ? 'Running' : 'Ready'
 
   return (
-    <div className="flex h-screen bg-gray-950 text-gray-100 overflow-hidden">
-      {/* Sidebar */}
-      <div className="w-[280px] shrink-0 flex flex-col">
-        <SessionList />
-      </div>
+    <div className="ms-app-shell">
+      <header className="ms-header">
+        <button
+          type="button"
+          className="ms-header-menu"
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Open sessions"
+        >
+          <MenuIcon />
+        </button>
 
-      {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
-        <header className="shrink-0 flex items-center gap-4 px-5 py-3 border-b border-gray-800 bg-gray-900">
-          {currentSession ? (
-            <>
-              <h1 className="text-sm font-semibold truncate flex-1">
-                {currentSession.name || 'Untitled'}
-              </h1>
-              {currentSession.model && (
-                <span className="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded shrink-0">
-                  {currentSession.model}
-                </span>
-              )}
-              {currentSession.tool && (
-                <span className="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded shrink-0">
-                  {currentSession.tool}
-                </span>
-              )}
-            </>
-          ) : (
-            <h1 className="text-sm font-semibold text-gray-500">MelodySync</h1>
+        <div className="ms-header-copy">
+          <h1 className="ms-header-title">{headerTitle}</h1>
+          <p className="ms-header-subtitle">{headerSubtitle}</p>
+        </div>
+
+        <div className="ms-header-actions">
+          {currentSession?.model && (
+            <span className="ms-header-chip">{currentSession.model}</span>
           )}
-        </header>
+          <span className={`ms-status-pill${currentSession?.activeRunId ? ' is-live' : ''}`}>
+            {statusLabel}
+          </span>
+        </div>
+      </header>
 
-        {/* Content */}
-        <div className="flex-1 min-h-0">
-          {currentSessionId ? (
-            <ChatView sessionId={currentSessionId} />
+      <div className="ms-layout">
+        <button
+          type="button"
+          className={`ms-sidebar-backdrop${sidebarOpen ? ' is-open' : ''}`}
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Close sessions"
+        />
+
+        <div className={`ms-sidebar-shell${sidebarOpen ? ' is-open' : ''}`}>
+          <SessionList onRequestClose={() => setSidebarOpen(false)} />
+        </div>
+
+        <main className="ms-main">
+          {currentSession ? (
+            <ChatView sessionId={currentSession.id} />
           ) : (
-            <div className="flex h-full items-center justify-center">
-              <div className="text-center">
-                <p className="text-gray-500 text-base">Select a session to start chatting</p>
-                <p className="text-gray-700 text-sm mt-1">
-                  Or create a new one from the sidebar
+            <div className="ms-empty-panel">
+              <div className="ms-empty-panel-copy">
+                <h2>{currentProject ? currentProject.name : 'Select a project'}</h2>
+                <p>
+                  {currentProject
+                    ? 'Choose a session from the sidebar or start a new one.'
+                    : 'Create or select a project to begin a session.'}
                 </p>
               </div>
             </div>
           )}
-        </div>
+        </main>
       </div>
     </div>
   )

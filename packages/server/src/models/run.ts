@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import type { Run, CreateRunInput } from '@melody-sync/types'
-import { db } from '../db'
+import { getDb } from '../db'
 
 function genId(): string {
   return 'run_' + randomBytes(8).toString('hex')
@@ -15,7 +15,6 @@ type RunRow = {
   session_id: string
   request_id: string
   state: string
-  tool: string
   model: string
   effort: string | null
   thinking: number
@@ -38,7 +37,6 @@ function rowToRun(row: RunRow): Run {
     sessionId: row.session_id,
     requestId: row.request_id,
     state: row.state as Run['state'],
-    tool: row.tool,
     model: row.model,
     effort: row.effort ?? undefined,
     thinking: row.thinking === 1,
@@ -59,6 +57,7 @@ function rowToRun(row: RunRow): Run {
 // ─── public API ───────────────────────────────────────────────────────────────
 
 export function getRun(id: string): Run | null {
+  const db = getDb()
   const row = db.query<RunRow, [string]>(
     'SELECT * FROM runs WHERE id = ?'
   ).get(id)
@@ -66,6 +65,7 @@ export function getRun(id: string): Run | null {
 }
 
 export function getRunsBySession(sessionId: string): Run[] {
+  const db = getDb()
   const rows = db.query<RunRow, [string]>(
     'SELECT * FROM runs WHERE session_id = ? ORDER BY created_at DESC'
   ).all(sessionId)
@@ -73,47 +73,33 @@ export function getRunsBySession(sessionId: string): Run[] {
 }
 
 export function createRun(input: CreateRunInput): Run {
+  const db = getDb()
   const id = genId()
   const ts = now()
 
-  const run: Run = {
-    id,
-    sessionId: input.sessionId,
-    requestId: input.requestId,
-    state: 'accepted',
-    tool: input.tool,
-    model: input.model,
-    effort: input.effort,
-    thinking: input.thinking ?? false,
-    cancelRequested: false,
-    createdAt: ts,
-    updatedAt: ts,
-  }
-
   db.run(
     `INSERT INTO runs (
-      id, session_id, request_id, state, tool, model, effort, thinking,
+      id, session_id, request_id, state, model, effort, thinking,
       cancel_requested, created_at, updated_at
-    ) VALUES (?,?,?,?,?,?,?,?,0,?,?)`,
+    ) VALUES (?,?,?,?,?,?,?,0,?,?)`,
     [
-      id, run.sessionId, run.requestId, run.state,
-      run.tool, run.model, run.effort ?? null, run.thinking ? 1 : 0,
+      id, input.sessionId, input.requestId, 'accepted',
+      input.model, input.effort ?? null, input.thinking ? 1 : 0,
       ts, ts,
     ]
   )
 
-  return run
+  return getRun(id)!
 }
 
 export function updateRun(id: string, patch: Partial<Run>): Run {
   const existing = getRun(id)
   if (!existing) throw new Error(`Run not found: ${id}`)
 
+  const db = getDb()
   const ts = now()
-  const updated: Run = { ...existing, ...patch, updatedAt: ts }
-
   const fieldMap: Array<[keyof Run, string]> = [
-    ['state', 'state'], ['tool', 'tool'], ['model', 'model'], ['effort', 'effort'],
+    ['state', 'state'], ['model', 'model'], ['effort', 'effort'],
     ['thinking', 'thinking'], ['cancelRequested', 'cancel_requested'],
     ['runnerProcessId', 'runner_process_id'], ['result', 'result'],
     ['failureReason', 'failure_reason'],
@@ -136,7 +122,7 @@ export function updateRun(id: string, patch: Partial<Run>): Run {
 
   params.push(id)
   db.run(`UPDATE runs SET ${sets.join(', ')} WHERE id = ?`, params)
-  return updated
+  return getRun(id)!
 }
 
 export function cancelRun(id: string): Run {

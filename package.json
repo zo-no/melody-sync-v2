@@ -7,7 +7,8 @@
     "dev:server": "pnpm --filter @melody-sync/server dev",
     "dev:web": "pnpm --filter @melody-sync/web dev",
     "build": "pnpm --filter @melody-sync/types build && pnpm --filter @melody-sync/server build && pnpm --filter @melody-sync/web build",
-    "typecheck": "pnpm --recursive typecheck"
+    "typecheck": "pnpm --recursive typecheck",
+    "test": "pnpm --filter @melody-sync/server test"
   },
   "packageManager": "pnpm@10.0.0"
 }

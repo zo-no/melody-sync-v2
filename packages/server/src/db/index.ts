@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path'
 function resolveDbPath(): string {
   const raw =
     process.env['MELODYSYNC_DB_PATH'] ??
-    `${process.env['HOME'] ?? '~'}/.melodysync/runtime/sessions/sessions.db`
+    `${process.env['HOME'] ?? '~'}/.melodysync/runtime/sessions.db`
 
   return raw.startsWith('~/')
     ? resolve(process.env['HOME'] ?? '', raw.slice(2))
@@ -16,52 +16,45 @@ function initSchema(db: Database): void {
   db.run('PRAGMA journal_mode = WAL')
   db.run('PRAGMA foreign_keys = ON')
 
-  db.run(`CREATE TABLE IF NOT EXISTS sessions (
-    id                    TEXT PRIMARY KEY NOT NULL,
-    name                  TEXT NOT NULL,
-    folder                TEXT NOT NULL DEFAULT '~',
-    tool                  TEXT,
-    model                 TEXT,
-    effort                TEXT,
-    thinking              INTEGER DEFAULT 0,
-    workflow_state        TEXT DEFAULT '',
-    workflow_priority     TEXT,
-    task_list_origin      TEXT,
-    task_list_visibility  TEXT,
-    lt_role               TEXT,
-    lt_bucket             TEXT,
-    persistent_kind       TEXT,
-    builtin_name          TEXT,
-    project_session_id    TEXT,
-    forked_from_session_id TEXT,
-    root_session_id       TEXT,
-    source_id             TEXT,
-    external_trigger_id   TEXT,
-    pinned                INTEGER DEFAULT 0,
-    archived              INTEGER DEFAULT 0,
-    archived_at           TEXT,
-    active_run_id         TEXT,
-    ordinal               INTEGER NOT NULL,
-    data                  TEXT NOT NULL,
-    created_at            TEXT NOT NULL,
-    updated_at            TEXT NOT NULL
+  db.run(`CREATE TABLE IF NOT EXISTS projects (
+    id            TEXT PRIMARY KEY NOT NULL,
+    name          TEXT NOT NULL,
+    path          TEXT NOT NULL,
+    system_prompt TEXT,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
   ) STRICT`)
 
-  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_list
-    ON sessions (task_list_visibility, workflow_state, updated_at DESC)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_projects_updated
+    ON projects (updated_at DESC)`)
+
+  db.run(`CREATE TABLE IF NOT EXISTS sessions (
+    id                  TEXT PRIMARY KEY NOT NULL,
+    project_id          TEXT NOT NULL REFERENCES projects(id),
+    name                TEXT NOT NULL,
+    auto_rename_pending INTEGER DEFAULT 0,
+    model               TEXT,
+    effort              TEXT,
+    thinking            INTEGER DEFAULT 0,
+    active_run_id       TEXT,
+    follow_up_queue     TEXT NOT NULL DEFAULT '[]',
+    pinned              INTEGER DEFAULT 0,
+    archived            INTEGER DEFAULT 0,
+    archived_at         TEXT,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL
+  ) STRICT`)
+
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_project
-    ON sessions (project_session_id, lt_bucket)`)
-  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_pinned
-    ON sessions (pinned DESC, updated_at DESC)`)
-  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_external
-    ON sessions (external_trigger_id)`)
+    ON sessions (project_id, pinned DESC, updated_at DESC)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_list
+    ON sessions (archived, updated_at DESC)`)
 
   db.run(`CREATE TABLE IF NOT EXISTS runs (
     id                    TEXT PRIMARY KEY NOT NULL,
-    session_id            TEXT NOT NULL,
+    session_id            TEXT NOT NULL REFERENCES sessions(id),
     request_id            TEXT NOT NULL,
     state                 TEXT NOT NULL DEFAULT 'accepted',
-    tool                  TEXT NOT NULL,
     model                 TEXT NOT NULL,
     effort                TEXT,
     thinking              INTEGER DEFAULT 0,
@@ -81,14 +74,18 @@ function initSchema(db: Database): void {
   db.run(`CREATE INDEX IF NOT EXISTS idx_runs_session
     ON runs (session_id, created_at DESC)`)
 
-  db.run(`CREATE TABLE IF NOT EXISTS hooks (
-    id                TEXT PRIMARY KEY NOT NULL,
-    event_pattern     TEXT NOT NULL,
-    label             TEXT NOT NULL,
-    shell_command     TEXT NOT NULL,
-    run_in_background INTEGER DEFAULT 0,
-    enabled           INTEGER DEFAULT 1,
-    created_at        TEXT NOT NULL
+  db.run(`CREATE TABLE IF NOT EXISTS auth (
+    id         TEXT PRIMARY KEY NOT NULL,
+    kind       TEXT NOT NULL,
+    value      TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  ) STRICT`)
+
+  db.run(`CREATE TABLE IF NOT EXISTS auth_sessions (
+    id         TEXT PRIMARY KEY NOT NULL,
+    created_at TEXT NOT NULL,
+    last_seen  TEXT NOT NULL,
+    expires_at TEXT
   ) STRICT`)
 
   db.run(`CREATE TABLE IF NOT EXISTS settings (
@@ -112,4 +109,7 @@ export function getDb(): Database {
   return _db
 }
 
-export const db = getDb()
+/** Override the db instance (for testing). Must be called before any model is used. */
+export function setDb(instance: Database): void {
+  _db = instance
+}

@@ -37,8 +37,7 @@ runsRouter.get('/runs/:id', (c) => {
 runsRouter.get('/sessions/:id/runs', (c) => {
   const sessionId = c.req.param('id')
   try {
-    const runs = getRunsBySession(sessionId)
-    return c.json(ok(runs))
+    return c.json(ok(getRunsBySession(sessionId)))
   } catch (e) {
     return c.json(errBody(String(e)), sc(500))
   }

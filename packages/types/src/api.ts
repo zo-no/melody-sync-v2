@@ -22,7 +22,15 @@ export interface PagedResult<T> {
 }
 
 // Session event (history)
-export type EventType = 'message' | 'reasoning' | 'tool_use' | 'tool_result' | 'status'
+export type EventType =
+  | 'message'
+  | 'reasoning'
+  | 'tool_use'
+  | 'tool_result'
+  | 'status'
+  | 'file_change'
+  | 'usage'
+
 export type EventRole = 'user' | 'assistant'
 
 export interface SessionEvent {
@@ -30,19 +38,20 @@ export interface SessionEvent {
   timestamp: number
   type: EventType
   role?: EventRole
-  content?: string
-  toolInput?: string
-  output?: string
-  bodyLoaded: boolean
-  bodyTruncated?: boolean
+  content?: string       // message / reasoning
+  toolInput?: string     // tool_use
+  output?: string        // tool_result
+  bodyRef?: string
   bodyBytes?: number
+  bodyPreview?: string
+  bodyTruncated?: boolean
 }
 
 // Message submission
 export interface SendMessageInput {
   text: string
-  attachments?: MessageAttachment[]
   requestId?: string
+  attachments?: MessageAttachment[]
 }
 
 export interface MessageAttachment {
@@ -53,8 +62,8 @@ export interface MessageAttachment {
 }
 
 // WebSocket invalidation hint
-export interface WsInvalidation {
-  type: 'session' | 'run' | 'workbench'
-  id: string
-  event: string
-}
+export type WsMessage =
+  | { type: 'session_invalidated'; sessionId: string }
+  | { type: 'sessions_invalidated'; projectId: string }
+  | { type: 'projects_invalidated' }
+  | { type: 'run_delta'; runId: string; sessionId: string; delta: unknown }

@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "bun --watch src/server.ts",
     "build": "bun build src/server.ts --outdir dist --target bun && bun build src/cli.ts --compile --outfile dist/melodysync",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src/__tests__"
   },
   "dependencies": {
     "@melody-sync/types": "workspace:*",

@@ -7,7 +7,6 @@ export interface Run {
   requestId: string
 
   state: RunState
-  tool: string
   model: string
   effort?: string
   thinking: boolean
@@ -19,11 +18,6 @@ export interface Run {
   finalizedAt?: string
 
   cancelRequested: boolean
-  cancelRequestedAt?: string
-
-  providerResumeId?: string
-  claudeSessionId?: string
-  codexThreadId?: string
 
   runnerProcessId?: number
 
@@ -37,7 +31,6 @@ export interface Run {
 export interface CreateRunInput {
   sessionId: string
   requestId: string
-  tool: string
   model: string
   effort?: string
   thinking?: boolean

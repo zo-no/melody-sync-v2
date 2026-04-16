@@ -11,7 +11,7 @@ function printJson(value: unknown): void {
 function printRun(r: Run): void {
   console.log(`${r.id}  state: ${r.state}`)
   console.log(`  session: ${r.sessionId}  request: ${r.requestId}`)
-  console.log(`  tool: ${r.tool}  model: ${r.model}`)
+  console.log(`  model: ${r.model}`)
   if (r.result) console.log(`  result: ${r.result}`)
   if (r.failureReason) console.log(`  failure: ${r.failureReason}`)
   console.log(`  created: ${r.createdAt}  updated: ${r.updatedAt}`)
@@ -27,7 +27,7 @@ function printRuns(list: Run[]): void {
     const elapsed = r.completedAt
       ? `${((new Date(r.completedAt).getTime() - new Date(r.createdAt).getTime()) / 1000).toFixed(1)}s`
       : 'in progress'
-    console.log(`${r.id}  ${r.state.padEnd(12)}  ${r.tool}  ${elapsed}`)
+    console.log(`${r.id}  ${r.state.padEnd(12)}  ${r.model}  ${elapsed}`)
   }
 }
 
@@ -48,11 +48,7 @@ runCommand
         console.error(`Run not found: ${id}`)
         process.exit(1)
       }
-      if (opts.json) {
-        printJson(run)
-      } else {
-        printRun(run)
-      }
+      opts.json ? printJson(run) : printRun(run)
     } catch (e) {
       console.error('Error:', String(e))
       process.exit(1)
@@ -67,11 +63,7 @@ runCommand
   .action((sessionId: string, opts: { json: boolean }) => {
     try {
       const runs = getRunsBySession(sessionId)
-      if (opts.json) {
-        printJson(runs)
-      } else {
-        printRuns(runs)
-      }
+      opts.json ? printJson(runs) : printRuns(runs)
     } catch (e) {
       console.error('Error:', String(e))
       process.exit(1)
@@ -86,11 +78,7 @@ runCommand
   .action((id: string, opts: { json: boolean }) => {
     try {
       const run = cancelRun(id)
-      if (opts.json) {
-        printJson(run)
-      } else {
-        console.log(`Cancel requested for run: ${run.id}  (state: ${run.state})`)
-      }
+      opts.json ? printJson(run) : console.log(`Cancel requested for run: ${run.id}  (state: ${run.state})`)
     } catch (e) {
       console.error('Error:', String(e))
       process.exit(1)
