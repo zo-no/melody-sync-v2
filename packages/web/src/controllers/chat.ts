@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { SessionEvent, Run } from '@melody-sync/types'
 import * as api from '@/api/client'
+import { useSessionStore } from '@/controllers/session'
 
 interface ChatState {
   events: SessionEvent[]
@@ -19,7 +20,7 @@ interface ChatActions {
 
 type ChatStore = ChatState & ChatActions
 
-export const useChatStore = create<ChatStore>((set) => ({
+export const useChatStore = create<ChatStore>((set, get) => ({
   events: [],
   sending: false,
   draft: '',
@@ -33,9 +34,22 @@ export const useChatStore = create<ChatStore>((set) => ({
   },
 
   async sendMessage(sessionId: string, text: string): Promise<void> {
+    const nextDraft = text.trim()
+    if (!nextDraft) return
+
     set({ sending: true, draft: '' })
     try {
-      await api.sendMessage(sessionId, { text })
+      const result = await api.sendMessage(sessionId, { text: nextDraft })
+      if (!result.ok) {
+        set({ draft: nextDraft })
+        return
+      }
+
+      await get().fetchEvents(sessionId)
+      const { currentProjectId, fetchSessions } = useSessionStore.getState()
+      if (currentProjectId) {
+        await fetchSessions(currentProjectId)
+      }
     } finally {
       set({ sending: false })
     }

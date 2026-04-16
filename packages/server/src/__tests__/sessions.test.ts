@@ -180,7 +180,7 @@ describe('GET /api/sessions/:id/events', () => {
 // ── Send message ──────────────────────────────────────────────────────────────
 
 describe('POST /api/sessions/:id/messages', () => {
-  it('returns queued:true (runner not wired yet)', async () => {
+  it('persists the user message and placeholder assistant reply', async () => {
     const { json: s } = await POST<Session>('/api/sessions', { projectId: projId })
     if (!s.ok) throw new Error()
     const { status, json } = await POST(`/api/sessions/${s.data.id}/messages`, {
@@ -190,8 +190,24 @@ describe('POST /api/sessions/:id/messages', () => {
     expect(status).toBe(200)
     expect(json.ok).toBe(true)
     if (json.ok) {
-      const data = json.data as { queued: boolean }
-      expect(data.queued).toBe(true)
+      const data = json.data as { queued: boolean; session: Session }
+      expect(data.queued).toBe(false)
+      expect(data.session.id).toBe(s.data.id)
+    }
+
+    const { json: events } = await GET(`/api/sessions/${s.data.id}/events`)
+    expect(events.ok).toBe(true)
+    if (events.ok) {
+      const items = (events.data as { items: Array<{ type: string; role?: string; content?: string }> }).items
+      expect(items).toHaveLength(2)
+      expect(items[0]).toMatchObject({
+        type: 'message',
+        role: 'user',
+        content: 'Hello',
+      })
+      expect(items[1].type).toBe('message')
+      expect(items[1].role).toBe('assistant')
+      expect(items[1].content).toContain('Message saved.')
     }
   })
 

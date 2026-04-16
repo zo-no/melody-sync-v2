@@ -3,15 +3,21 @@
  * that talks directly to the Hono app (no network).
  */
 import { Database } from 'bun:sqlite'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { setDb } from '../db'
 import { app } from '../server'
 
 // ── DB isolation ──────────────────────────────────────────────────────────────
 
 let _mem: Database | null = null
+let _runtimeRoot: string | null = null
 
 export function setupTestDb(): Database {
   _mem = new Database(':memory:')
+  _runtimeRoot = mkdtempSync(join(tmpdir(), 'melody-sync-v2-test-'))
+  process.env['MELODYSYNC_DB_PATH'] = join(_runtimeRoot, 'sessions.db')
   _mem.run('PRAGMA journal_mode = WAL')
   _mem.run('PRAGMA foreign_keys = ON')
   _initSchema(_mem)
@@ -28,6 +34,11 @@ export function resetTestDb(): void {
   _mem.run('DELETE FROM auth')
   _mem.run('DELETE FROM auth_sessions')
   _mem.run('DELETE FROM settings')
+  if (_runtimeRoot) {
+    rmSync(_runtimeRoot, { recursive: true, force: true })
+    _runtimeRoot = mkdtempSync(join(tmpdir(), 'melody-sync-v2-test-'))
+    process.env['MELODYSYNC_DB_PATH'] = join(_runtimeRoot, 'sessions.db')
+  }
 }
 
 function _initSchema(db: Database): void {

@@ -9,7 +9,7 @@ import {
   updateSession,
   deleteSession,
 } from '../../models/session'
-import { listEvents } from '../../models/history'
+import { appendEvent, listEvents } from '../../models/history'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -158,6 +158,21 @@ sessionsRouter.post('/sessions/:id/messages', async (c) => {
   const session = getSession(id)
   if (!session) return c.json(errBody('Session not found'), sc(404))
 
-  // TODO: dispatch to runner
-  return c.json(ok({ queued: true, run: null, session }))
+  const now = Date.now()
+  appendEvent(id, {
+    timestamp: now,
+    type: 'message',
+    role: 'user',
+    content: parsed.data.text,
+  })
+
+  appendEvent(id, {
+    timestamp: now + 1,
+    type: 'message',
+    role: 'assistant',
+    content: 'Message saved. MelodySync v2 is not wired to a live AI runner yet, so this session currently records conversation history only.',
+  })
+
+  const updatedSession = updateSession(id, {})
+  return c.json(ok({ queued: false, run: null, session: updatedSession }))
 })
