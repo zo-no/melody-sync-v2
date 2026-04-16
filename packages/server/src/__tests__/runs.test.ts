@@ -27,8 +27,8 @@ describe('GET /api/sessions/:id/runs', () => {
   })
 
   it('returns created runs', async () => {
-    createRun({ sessionId: sessId, requestId: 'req_1', model: 'claude-opus-4-5' })
-    createRun({ sessionId: sessId, requestId: 'req_2', model: 'claude-opus-4-5' })
+    createRun({ sessionId: sessId, requestId: 'req_1', tool: 'claude', model: 'claude-opus-4-5' })
+    createRun({ sessionId: sessId, requestId: 'req_2', tool: 'claude', model: 'claude-opus-4-5' })
     const { json } = await GET<Run[]>(`/api/sessions/${sessId}/runs`)
     expect(json.ok).toBe(true)
     if (json.ok) expect(json.data).toHaveLength(2)
@@ -42,13 +42,14 @@ describe('GET /api/runs/:id', () => {
   })
 
   it('returns the run', async () => {
-    const run = createRun({ sessionId: sessId, requestId: 'req_1', model: 'claude-opus-4-5' })
+    const run = createRun({ sessionId: sessId, requestId: 'req_1', tool: 'claude', model: 'claude-opus-4-5' })
     const { status, json } = await GET<Run>(`/api/runs/${run.id}`)
     expect(status).toBe(200)
     expect(json.ok).toBe(true)
     if (json.ok) {
       expect(json.data.id).toBe(run.id)
       expect(json.data.state).toBe('accepted')
+      expect(json.data.tool).toBe('claude')
       expect(json.data.model).toBe('claude-opus-4-5')
     }
   })
@@ -56,7 +57,7 @@ describe('GET /api/runs/:id', () => {
 
 describe('POST /api/runs/:id/cancel', () => {
   it('sets cancelRequested=true', async () => {
-    const run = createRun({ sessionId: sessId, requestId: 'req_1', model: 'claude-opus-4-5' })
+    const run = createRun({ sessionId: sessId, requestId: 'req_1', tool: 'claude', model: 'claude-opus-4-5' })
     const { status, json } = await POST<Run>(`/api/runs/${run.id}/cancel`)
     expect(status).toBe(200)
     expect(json.ok).toBe(true)

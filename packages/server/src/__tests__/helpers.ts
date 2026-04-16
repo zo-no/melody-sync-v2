@@ -51,7 +51,9 @@ function _initSchema(db: Database): void {
   db.run(`CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY NOT NULL, project_id TEXT NOT NULL REFERENCES projects(id),
     name TEXT NOT NULL, auto_rename_pending INTEGER DEFAULT 0,
+    tool TEXT,
     model TEXT, effort TEXT, thinking INTEGER DEFAULT 0,
+    claude_session_id TEXT, codex_thread_id TEXT,
     active_run_id TEXT, follow_up_queue TEXT NOT NULL DEFAULT '[]',
     pinned INTEGER DEFAULT 0, archived INTEGER DEFAULT 0, archived_at TEXT,
     created_at TEXT NOT NULL, updated_at TEXT NOT NULL
@@ -72,7 +74,8 @@ function _initSchema(db: Database): void {
   db.run(`CREATE TABLE IF NOT EXISTS runs (
     id TEXT PRIMARY KEY NOT NULL, session_id TEXT NOT NULL REFERENCES sessions(id),
     request_id TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'accepted',
-    model TEXT NOT NULL, effort TEXT, thinking INTEGER DEFAULT 0,
+    tool TEXT NOT NULL DEFAULT 'codex', model TEXT NOT NULL, effort TEXT, thinking INTEGER DEFAULT 0,
+    claude_session_id TEXT, codex_thread_id TEXT,
     cancel_requested INTEGER DEFAULT 0, result TEXT, failure_reason TEXT,
     runner_process_id INTEGER, context_input_tokens INTEGER, context_window_tokens INTEGER,
     created_at TEXT NOT NULL, started_at TEXT, updated_at TEXT NOT NULL,
@@ -114,3 +117,19 @@ export const GET = <T = unknown>(path: string) => apiReq<T>('GET', path)
 export const POST = <T = unknown>(path: string, body?: unknown) => apiReq<T>('POST', path, body)
 export const PATCH = <T = unknown>(path: string, body: unknown) => apiReq<T>('PATCH', path, body)
 export const DEL = (path: string) => apiReq('DELETE', path)
+
+export async function waitFor(
+  predicate: () => boolean | Promise<boolean>,
+  opts: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<void> {
+  const timeoutMs = opts.timeoutMs ?? 3000
+  const intervalMs = opts.intervalMs ?? 25
+  const deadline = Date.now() + timeoutMs
+
+  while (Date.now() < deadline) {
+    if (await predicate()) return
+    await Bun.sleep(intervalMs)
+  }
+
+  throw new Error(`waitFor timed out after ${timeoutMs}ms`)
+}

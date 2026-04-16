@@ -68,6 +68,7 @@ describe('session model', () => {
     expect(s.id).toMatch(/^sess_/)
     expect(s.projectId).toBe(projId)
     expect(s.name).toBe('Chat 1')
+    expect(s.tool).toBe('codex')
     expect(s.archived).toBeFalsy()
     expect(s.pinned).toBeFalsy()
 
@@ -110,6 +111,23 @@ describe('session model', () => {
     expect(unarchived.archived).toBeFalsy()
     expect(unarchived.archivedAt).toBeUndefined()
   })
+
+  it('persists provider resume ids on create and update', () => {
+    const created = createSession({
+      projectId: projId,
+      tool: 'claude',
+      claudeSessionId: 'sess_claude_1',
+    })
+    expect(created.claudeSessionId).toBe('sess_claude_1')
+    expect(created.codexThreadId).toBeUndefined()
+
+    const updated = updateSession(created.id, {
+      claudeSessionId: null,
+      codexThreadId: 'thread_codex_1',
+    })
+    expect(updated.claudeSessionId).toBeUndefined()
+    expect(updated.codexThreadId).toBe('thread_codex_1')
+  })
 })
 
 // ── Follow-up queue ───────────────────────────────────────────────────────────
@@ -128,8 +146,22 @@ describe('follow-up queue', () => {
   })
 
   it('enqueue / dequeue roundtrip', () => {
-    enqueueFollowUp(sessId, { requestId: 'req_1', text: 'Hello' })
-    enqueueFollowUp(sessId, { requestId: 'req_2', text: 'World' })
+    enqueueFollowUp(sessId, {
+      requestId: 'req_1',
+      text: 'Hello',
+      tool: 'codex',
+      model: null,
+      effort: 'medium',
+      thinking: false,
+    })
+    enqueueFollowUp(sessId, {
+      requestId: 'req_2',
+      text: 'World',
+      tool: 'claude',
+      model: 'opus',
+      effort: null,
+      thinking: true,
+    })
     expect(getFollowUpQueue(sessId)).toHaveLength(2)
 
     const first = dequeueFollowUp(sessId)
@@ -142,8 +174,22 @@ describe('follow-up queue', () => {
   })
 
   it('deduplicates by requestId', () => {
-    enqueueFollowUp(sessId, { requestId: 'req_1', text: 'Hello' })
-    enqueueFollowUp(sessId, { requestId: 'req_1', text: 'Hello again' })
+    enqueueFollowUp(sessId, {
+      requestId: 'req_1',
+      text: 'Hello',
+      tool: 'codex',
+      model: null,
+      effort: 'medium',
+      thinking: false,
+    })
+    enqueueFollowUp(sessId, {
+      requestId: 'req_1',
+      text: 'Hello again',
+      tool: 'codex',
+      model: null,
+      effort: 'high',
+      thinking: false,
+    })
     expect(getFollowUpQueue(sessId)).toHaveLength(1)
   })
 })
@@ -160,10 +206,11 @@ describe('run model', () => {
   })
 
   it('create / get roundtrip', () => {
-    const r = createRun({ sessionId: sessId, requestId: 'req_1', model: 'claude-opus-4-5' })
+    const r = createRun({ sessionId: sessId, requestId: 'req_1', tool: 'claude', model: 'claude-opus-4-5' })
     expect(r.id).toMatch(/^run_/)
     expect(r.state).toBe('accepted')
     expect(r.cancelRequested).toBe(false)
+    expect(r.tool).toBe('claude')
     expect(r.model).toBe('claude-opus-4-5')
 
     const fetched = getRun(r.id)
@@ -171,13 +218,13 @@ describe('run model', () => {
   })
 
   it('updateRun transitions state', () => {
-    const r = createRun({ sessionId: sessId, requestId: 'req_1', model: 'claude-opus-4-5' })
+    const r = createRun({ sessionId: sessId, requestId: 'req_1', tool: 'claude', model: 'claude-opus-4-5' })
     const updated = updateRun(r.id, { state: 'running' })
     expect(updated.state).toBe('running')
   })
 
   it('cancelRun sets cancelRequested', () => {
-    const r = createRun({ sessionId: sessId, requestId: 'req_1', model: 'claude-opus-4-5' })
+    const r = createRun({ sessionId: sessId, requestId: 'req_1', tool: 'claude', model: 'claude-opus-4-5' })
     const cancelled = cancelRun(r.id)
     expect(cancelled.cancelRequested).toBe(true)
   })
