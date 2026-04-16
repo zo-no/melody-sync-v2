@@ -51,6 +51,10 @@ export interface SessionEvent {
 export interface SendMessageInput {
   text: string
   requestId?: string
+  tool?: string
+  model?: string | null
+  effort?: string | null
+  thinking?: boolean
   attachments?: MessageAttachment[]
 }
 

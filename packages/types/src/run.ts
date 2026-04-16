@@ -7,9 +7,12 @@ export interface Run {
   requestId: string
 
   state: RunState
+  tool: string
   model: string
   effort?: string
   thinking: boolean
+  claudeSessionId?: string
+  codexThreadId?: string
 
   createdAt: string
   startedAt?: string
@@ -31,7 +34,10 @@ export interface Run {
 export interface CreateRunInput {
   sessionId: string
   requestId: string
+  tool: string
   model: string
   effort?: string
   thinking?: boolean
+  claudeSessionId?: string
+  codexThreadId?: string
 }
